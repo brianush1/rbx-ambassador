@@ -158,7 +158,7 @@ function encode(...)
 			id = objects[data],
 			fallback = result
 		}
-	elseif result then
+	elseif result ~= nil then
 		return result
 	end
 
