@@ -122,15 +122,9 @@ function encode(...)
 	local data = ...
 	local dataType = type(data)
 
-	if data ~= nil and objects[data] then
-		return {
-			type = "remoteObject",
-			id = objects[data]
-		}
-	end
-
+	local result
 	if dataType == "string" or dataType == "number" or dataType == "boolean" or dataType == "nil" then
-		return data
+		result = data
 	elseif dataType == "table" then
 		local meta = getmetatable(data)
 
@@ -142,7 +136,7 @@ function encode(...)
 			encoded[encode(key)] = encode(value)
 		end
 
-		return {
+		result = {
 			type = meta and "metatable" or "regtable",
 			id = generateObjectId(data),
 			meta = meta and encode(meta),
@@ -151,11 +145,21 @@ function encode(...)
 	elseif dataType == "function" then
 		local player = game.Players.LocalPlayer
 		if player then player = player.Name end
-		return {
+		result = {
 			type = "function",
 			player = player,
 			id = generateObjectId(data)
 		}
+	end
+
+	if data ~= nil and objects[data] then
+		return {
+			type = "remoteObject",
+			id = objects[data],
+			fallback = result
+		}
+	elseif result then
+		return result
 	end
 
 	error("Cannot encode '" .. dataType .. "'", 0)
@@ -172,7 +176,9 @@ function decode(data)
 			return objects[data.id]
 		end
 
-		if dataType == "regtable" then
+		if data.type == "remoteObject" then
+			return decode(data.fallback)
+		elseif dataType == "regtable" then
 			local decoded = {}
 	
 			for key, value in pairs(data.value) do
@@ -306,6 +312,17 @@ function Ambassador:Receive(...)
 	local success, ambassador = Ambassador:Await(...)
 	assert(success, "Could not receive ambassador")
 	return ambassador
+end
+
+if Server then
+	function Ambassador:Cleanup(player)
+		local suffix = "/" .. player.Name
+		for i, v in ipairs(game:GetService("ReplicatedStorage"):GetChildren()) do
+			if v.Name:sub(#v.Name - #suffix + 1) == suffix then
+				pcall(v.Destroy, v)
+			end
+		end
+	end
 end
 
 return Ambassador
