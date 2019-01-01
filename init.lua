@@ -246,7 +246,9 @@ end
 function Ambassador:Send(name, target, data)
 	assert(not (Server and not data), "Expected target for server ambassador")
 
-	if not Server then
+	if Server then
+		assert(target.Parent, "Expected target to be in-game")
+	else
 		data = target
 		target = game.Players.LocalPlayer
 	end
@@ -273,7 +275,9 @@ end
 function Ambassador:Await(name, target, timeout)
 	assert(not (Server and not target), "Expected target for client ambassador")
 
-	if not Server then
+	if Server then
+		assert(target.Parent, "Expected target to be in-game")
+	else
 		timeout = target
 		target = game.Players.LocalPlayer
 	end
