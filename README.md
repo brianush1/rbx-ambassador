@@ -1,3 +1,3 @@
 # Ambassador
 A library that greatly simplifies communication between server and client.
-Check the wiki for examples.
+See [documentation](https://github.com/brianush1/rbx-ambassador/wiki/Documentation)
