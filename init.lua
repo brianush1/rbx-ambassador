@@ -257,8 +257,17 @@ function encode(...)
 	local dataType = typeof(data)
 
 	local result
-	if dataType == "string" or dataType == "number" or dataType == "boolean" or dataType == "nil" then
+	if dataType == "string" or dataType == "number" then
 		result = data
+	elseif dataType == "boolean" then
+		result = {
+			type = "bool",
+			data = data and 1 or 0
+		}
+	elseif dataType == "nil" then
+		result = {
+			type = "nil"
+		}
 	elseif dataType == "table" then
 		local meta = getmetatable(data)
 
@@ -320,6 +329,10 @@ function decode(data)
 			return decode(data.fallback)
 		elseif dataType == "enum" then
 			return Enum[data.enum][data.name]
+		elseif dataType == "bool" then
+			return data.data == 1
+		elseif dataType == "nil" then
+			return nil
 		elseif dataType == "regtable" then
 			local decoded = {}
 	
@@ -384,7 +397,20 @@ function decode(data)
 end
 
 function encodeTransmittion(...)
-	return encrypt(game:GetService("HttpService"):JSONEncode(encode(...)), key)
+	local length = select("#", ...)
+	local encoded = {}
+
+	for i = 1, length do
+		encoded[i] = encode((select(i, ...)))
+	end
+
+	local result = {
+		type = "vararg",
+		length = length,
+		value = encoded
+	}
+
+	return encrypt(game:GetService("HttpService"):JSONEncode(result), key)
 end
 
 function decodeTransmittion(data)
