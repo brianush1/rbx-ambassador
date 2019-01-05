@@ -387,7 +387,7 @@ function encodeTransmittion(...)
 end
 
 function decodeTransmittion(data)
-	return decrypt(decode(game:GetService("HttpService"):JSONDecode(data)), key)
+	return decode(game:GetService("HttpService"):JSONDecode(decrypt(data, key)))
 end
 
 function Ambassador:Send(name, target, data)
