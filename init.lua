@@ -29,7 +29,8 @@ local InvokationType = {
 	RequestAmbassador = 0
 }
 
-local key = tostring(game.JobId):sub(3, 14) -- it's not "secure" encryption, but better than nothing
+local key = game.JobId -- it's not "secure" encryption, but better than nothing
+if #key < 2 then key = "builtinAMQLFPXMFTWLkey" end
 
 --[[
 
