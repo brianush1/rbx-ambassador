@@ -253,7 +253,7 @@ function encode(...)
 	end
 
 	local data = ...
-	local dataType = type(data)
+	local dataType = typeof(data)
 
 	local result
 	if dataType == "string" or dataType == "number" or dataType == "boolean" or dataType == "nil" then
@@ -283,6 +283,12 @@ function encode(...)
 			player = player,
 			id = generateObjectId(data)
 		}
+	elseif dataType == "EnumItem" then
+		result = {
+			type = "enum",
+			enum = tostring(data.EnumType),
+			name = data.Name
+		}
 	end
 
 	if data ~= nil and objects[data] then
@@ -311,6 +317,8 @@ function decode(data)
 
 		if data.type == "remoteObject" then
 			return decode(data.fallback)
+		elseif dataType == "enum" then
+			return Enum[data.enum][data.name]
 		elseif dataType == "regtable" then
 			local decoded = {}
 	
@@ -375,11 +383,11 @@ function decode(data)
 end
 
 function encodeTransmittion(...)
-	return encode(...) --game:GetService("HttpService"):JSONEncode(encode(...))
+	return encrypt(game:GetService("HttpService"):JSONEncode(encode(...)), key)
 end
 
 function decodeTransmittion(data)
-	return decode(data) --decode(game:GetService("HttpService"):JSONDecode(data))
+	return decrypt(decode(game:GetService("HttpService"):JSONDecode(data)), key)
 end
 
 function Ambassador:Send(name, target, data)
