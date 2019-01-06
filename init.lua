@@ -1,10 +1,13 @@
 -- @name            Ambassador Library
 -- @author          brianush1
 -- @description     A library that allows for easy communication between client and server
--- @version         0.04
+-- @version         0.05
 
 --[[
 	Changelog:
+
+	0.05:
+		- Fix a security vulnerability
 
 	0.04:
 		- Add basic encryption
@@ -196,6 +199,7 @@ function remoteInvokeHandler(name, func)
 end
 
 local objects = {}
+local players = {}
 
 function generateObjectId(object)
 	if objects[object] then return objects[object] end
@@ -218,7 +222,7 @@ if Server then
 
 	remoteInvokeHandler("FunctionCall", function(player, id, data)
 		local success, result = pcall(function()
-			return encodeTransmittion(objects[id](decodeTransmittion(data)))
+			return encodeTransmittion(player, objects[id](decodeTransmittion(player, data)))
 		end)
 
 		if success then
@@ -232,18 +236,18 @@ if Server then
 else
 
 	remoteInvokeHandler("FunctionCall", function(id, data)
-		return encodeTransmittion(objects[id](decodeTransmittion(data)))
+		return encodeTransmittion(nil, objects[id](decodeTransmittion(nil, data)))
 	end)
 
 end
 
-function encode(...)
+function encode(player, ...)
 	if select("#", ...) ~= 1 then
 		local length = select("#", ...)
 		local encoded = {}
 
 		for i = 1, length do
-			encoded[i] = encode((select(i, ...)))
+			encoded[i] = encode(player, (select(i, ...)))
 		end
 
 		return {
@@ -268,7 +272,8 @@ function encode(...)
 		result = {
 			type = "nil"
 		}
-	elseif dataType == "table" then
+	elseif dataType == "table" then -- Metatable support is kind of iffy, cuz yielding in a metamethod can't happen
+		-- Iffy meaning non-existent*
 		local meta = getmetatable(data)
 
 		if type(meta) ~= "table" and meta ~= nil then error("Cannot encode locked metatable", 0) end
@@ -276,21 +281,18 @@ function encode(...)
 		local encoded = {}
 
 		for key, value in pairs(data) do
-			encoded[encode(key)] = encode(value)
+			encoded[encode(player, key)] = encode(player, value)
 		end
 
 		result = {
 			type = meta and "metatable" or "regtable",
 			id = generateObjectId(data),
-			meta = meta and encode(meta),
+			meta = meta and encode(player, meta),
 			value = encoded
 		}
 	elseif dataType == "function" then
-		local player = game.Players.LocalPlayer
-		if player then player = player.Name end
 		result = {
 			type = "function",
-			player = player,
 			id = generateObjectId(data)
 		}
 	elseif dataType == "EnumItem" then
@@ -314,7 +316,7 @@ function encode(...)
 	error("Cannot encode '" .. dataType .. "'", 0)
 end
 
-function decode(data)
+function decode(player, data)
 	local dataType = type(data)
 	if dataType == "string" or dataType == "number" or dataType == "boolean" then
 		return data
@@ -325,8 +327,12 @@ function decode(data)
 			return objects[data.id]
 		end
 
+		if data.id then
+			players[data.id] = player
+		end
+
 		if data.type == "remoteObject" then
-			return decode(data.fallback)
+			return decode(player, data.fallback)
 		elseif dataType == "enum" then
 			return Enum[data.enum][data.name]
 		elseif dataType == "bool" then
@@ -337,7 +343,7 @@ function decode(data)
 			local decoded = {}
 	
 			for key, value in pairs(data.value) do
-				decoded[decode(key)] = decode(value)
+				decoded[decode(player, key)] = decode(player, value)
 			end
 	
 			local result = decoded
@@ -347,14 +353,14 @@ function decode(data)
 
 			return result
 		elseif dataType == "metatable" then
-			local meta = decode(data.meta)
+			local meta = decode(player, data.meta)
 
 			meta.__metatable = "The metatable is locked"
 
 			local decoded = {}
 	
 			for key, value in pairs(data.value) do
-				decoded[decode(key)] = decode(value)
+				decoded[decode(player, key)] = decode(player, value)
 			end
 
 			local result = setmetatable(decoded, {
@@ -372,17 +378,17 @@ function decode(data)
 			local decoded = {}
 
 			for index, value in ipairs(data.value) do
-				decoded[index] = decode(value)
+				decoded[index] = decode(player, value)
 			end
 
 			return unpack(decoded, 1, data.length)
 		elseif dataType == "function" then
 			local result = function(...)
 				if Server then
-					local player = game:GetService("Players"):FindFirstChild(data.player)
-					return decodeTransmittion(getRemote("FunctionCall"):InvokeClient(player, data.id, encodeTransmittion(...)))
+					local player = players[data.id]
+					return decodeTransmittion(player, getRemote("FunctionCall"):InvokeClient(player, data.id, encodeTransmittion(player, ...)))
 				else
-					return decodeTransmittion(getRemote("FunctionCall"):InvokeServer(data.id, encodeTransmittion(...)))
+					return decodeTransmittion(nil, getRemote("FunctionCall"):InvokeServer(data.id, encodeTransmittion(nil, ...)))
 				end
 			end
 
@@ -396,12 +402,12 @@ function decode(data)
 	error("Cannot decode '" .. dataType .. "'", 0)
 end
 
-function encodeTransmittion(...)
+function encodeTransmittion(to, ...)
 	local length = select("#", ...)
 	local encoded = {}
 
 	for i = 1, length do
-		encoded[i] = encode((select(i, ...)))
+		encoded[i] = encode(to, (select(i, ...)))
 	end
 
 	local result = {
@@ -413,8 +419,8 @@ function encodeTransmittion(...)
 	return encrypt(game:GetService("HttpService"):JSONEncode(result), key)
 end
 
-function decodeTransmittion(data)
-	return decode(game:GetService("HttpService"):JSONDecode(decrypt(data, key)))
+function decodeTransmittion(from, data)
+	return decode(from, game:GetService("HttpService"):JSONDecode(decrypt(data, key)))
 end
 
 function Ambassador:Send(name, target, data)
@@ -429,9 +435,9 @@ function Ambassador:Send(name, target, data)
 
 	local remote = createRemote(getName(Server, name, target))
 
-	local function invokationHandler(type, ...)
+	local function invokationHandler(whosRequesting, type, ...)
 		if type == InvokationType.RequestAmbassador then
-			return encodeTransmittion(data)
+			return encodeTransmittion(whosRequesting, data)
 		else
 			error("Unknown request", 0)
 		end
@@ -439,10 +445,12 @@ function Ambassador:Send(name, target, data)
 
 	if Server then
 		function remote.OnServerInvoke(player, ...)
-			return invokationHandler(...)
+			return invokationHandler(player, ...)
 		end
 	else
-		remote.OnClientInvoke = invokationHandler
+		function remote.OnClientInvoke(...)
+			return invokationHandler(nil, ...)
+		end
 	end
 end
 
@@ -470,9 +478,9 @@ function Ambassador:Await(name, target, timeout)
 		wait() until remote
 
 	if Server then
-		return true, decodeTransmittion(remote:InvokeClient(target, InvokationType.RequestAmbassador))
+		return true, decodeTransmittion(target, remote:InvokeClient(target, InvokationType.RequestAmbassador))
 	else
-		return true, decodeTransmittion(remote:InvokeServer(InvokationType.RequestAmbassador))
+		return true, decodeTransmittion(nil, remote:InvokeServer(InvokationType.RequestAmbassador))
 	end
 end
 
