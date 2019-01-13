@@ -1,10 +1,13 @@
 -- @name            Ambassador Library
 -- @author          brianush1
 -- @description     A library that allows for easy communication between client and server
--- @version         0.05
+-- @version         0.06
 
 --[[
 	Changelog:
+	
+	0.06:
+		- Allow passing instances
 
 	0.05:
 		- Fix a security vulnerability
@@ -32,7 +35,7 @@ local InvokationType = {
 	RequestAmbassador = 0
 }
 
-local key = game.JobId -- it's not "secure" encryption, but better than nothing
+local key = game.JobId -- it's not "secure" encryption, and not really better than nothing
 if #key < 2 then key = "builtinAMQLFPXMFTWLkey" end
 
 --[[
@@ -214,7 +217,20 @@ function pack(...)
 	return select("#", ...), {...}
 end
 
+local instanceIDs = {}
+
 if Server then
+
+	function getId(instance)
+		if instanceIDs[instance] then
+			return instanceIDs[instance]
+		else
+			local id = game:GetService("HttpService"):GenerateGUID()
+			instanceIDs[instance] = id
+			instanceIDs[id] = instance
+			return id
+		end
+	end
 
 	remoteInvokeHandler("RemoteRequestHandler", function(player, name)
 		return createRemote(name)
@@ -230,6 +246,20 @@ if Server then
 		else
 			warn("Error: " .. result)
 			error("An error occurred on the server", 0)
+		end
+	end)
+
+	remoteInvokeHandler("GetID", function(player, instance)
+		if typeof(instance) ~= "Instance" then return "" end
+		return getId(instance)
+	end)
+
+	remoteInvokeHandler("GetInstance", function(player, id)
+		if type(id) ~= "string" then return "" end
+		if instanceIDs[id] then
+			return instanceIDs[id]
+		else
+			return nil
 		end
 	end)
 
@@ -300,6 +330,19 @@ function encode(player, ...)
 			type = "enum",
 			enum = tostring(data.EnumType),
 			name = data.Name
+		}
+	elseif dataType == "Instance" then
+		local id
+		
+		if Server then
+			id = getId(data)
+		else
+			id = getRemote("GetID"):InvokeServer(data)
+		end
+		
+		result = {
+			type = "instance",
+			id = id
 		}
 	end
 
@@ -396,6 +439,16 @@ function decode(player, data)
 			objects[result] = data.id
 
 			return result
+		elseif dataType == "instance" then
+			local instance
+			
+			if Server then
+				instance = instanceIDs[data.id or ""]
+			else
+				instance = getRemote("GetInstance"):InvokeServer(data.id)
+			end
+			
+			return instance
 		end
 	end
 
