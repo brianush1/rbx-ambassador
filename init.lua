@@ -1,10 +1,13 @@
 -- @name            Ambassador Library
 -- @author          brianush1
 -- @description     A library that allows for easy communication between client and server
--- @version         0.06
+-- @version         0.07
 
 --[[
 	Changelog:
+
+	0.07:
+		- Critical bugfix
 	
 	0.06:
 		- Allow passing instances
@@ -35,8 +38,7 @@ local InvokationType = {
 	RequestAmbassador = 0
 }
 
-local key = game.JobId -- it's not "secure" encryption, and not really better than nothing
-if #key < 2 then key = "builtinAMQLFPXMFTWLkey" end
+local key = "builtinAMQLFPXMFTWLkey"
 
 --[[
 
